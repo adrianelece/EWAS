@@ -306,9 +306,40 @@ ensembl_dataset = "btaurus_gene_ensembl" # ARS UCD 1.3
 window = 50000 # number of bases to search upstream and downstream the SNP position
 ensembl = biomaRt::useEnsembl(biomart="ensembl",dataset=ensembl_dataset)
 
-results = gwasResults
-results$Padj<-p.adjust( results$P, method="fdr")
-a
+results = gwasResultsp05
+rownames(results) <- results$SNP
+
+genes = list()
+
+for (snp_name in rownames(results)) {
+  snp = results[snp_name,]
+  genes[[snp_name]] = biomaRt::getBM(c('ensembl_gene_id',
+                                       'entrezgene_id',
+                                       'external_gene_name',
+                                       'start_position',
+                                       'end_position',
+                                       'uniprotsptrembl',
+                                       'uniprotswissprot'),  
+                                     filters = c("chromosome_name","start","end"),
+                                     values=list(snp$CHR,snp$BP-window,snp$BP+window),
+                                     mart=ensembl)
+}
+
+gwas_genes <- ldply(genes, function(x) {
+  rbind.data.frame(x)
+})
+
+gwas_genes <- gwas_genes[!is.na(gwas_genes$external_gene_name) & gwas_genes$external_gene_name != "",]
+
+gwas_genes <- do.call(rbind,genes)$external_gene_name
+
+View(gwas_genes)
+gwas_genes <-unique(gwas_genes)
+gwas_genes<-gwas_genes[!is.na(gwas_genes) & gwas_genes!=""]
+
+## write out file
+write.table(gwas_genes,file = "epigwas_genes.tsv", sep = "\t", col.names = FALSE,row.names = FALSE, quote=FALSE)
+
 
 
 
