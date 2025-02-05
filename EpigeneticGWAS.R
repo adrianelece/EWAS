@@ -25,6 +25,7 @@ library(viridis)
 library(org.Bt.eg.db)
 library(biomaRt)
 library(fuzzyjoin)
+library("plyr")
 
 ## include common functions
 
@@ -306,12 +307,19 @@ ensembl_dataset = "btaurus_gene_ensembl" # ARS UCD 1.3
 window = 50000 # number of bases to search upstream and downstream the SNP position
 ensembl = biomaRt::useEnsembl(biomart="ensembl",dataset=ensembl_dataset)
 
-results = gwasResultsp05
+results = as.data.frame(gwasResultsp05)
 rownames(results) <- results$SNP
+results$CHR[results$CHR=="30"]<-"MT"
+results$CHR[results$CHR=="31"]<-"X"
+
 
 genes = list()
+total_snps = nrow(results)
 
-for (snp_name in rownames(results)) {
+for(i in seq_along(rownames(results))) {
+  snp_name = rownames(results)[i]
+  message(sprintf("Processing SNP %d of %d: %s", i, total_snps, snp_name))
+  
   snp = results[snp_name,]
   genes[[snp_name]] = biomaRt::getBM(c('ensembl_gene_id',
                                        'entrezgene_id',
@@ -324,28 +332,6 @@ for (snp_name in rownames(results)) {
                                      values=list(snp$CHR,snp$BP-window,snp$BP+window),
                                      mart=ensembl)
 }
-test = biomaRt::getBM(c('ensembl_gene_id',
-                                       'entrezgene_id',
-                                       'external_gene_name',
-                                       "chromosome_name",
-                                       'start_position',
-                                       'end_position',
-                                       'uniprotsptrembl',
-                                       'uniprotswissprot'),
-                                    mart = ensembl)
-
-gene = data.frame()
-for(i in 1:nrow(results)){
-  for(j in 1:nrow(test)){
-    if(results[i,"CHR"]==test[j,"chromsome_name"] && 
-      results[i,"BP"]>=test[j,"start_position"] &&
-      results[i,"BP"]<=test[j,"start_position"]){
-    tmp = test[j,"external_gene_name"]  
-    gene = cbind(gene,tmp)  
-    }
-  }
-}
-
 
 gwas_genes <- ldply(genes, function(x) {
   rbind.data.frame(x)
@@ -354,42 +340,9 @@ gwas_genes <- ldply(genes, function(x) {
 gwas_genes <- gwas_genes[!is.na(gwas_genes$external_gene_name) & gwas_genes$external_gene_name != "",]
 
 gwas_genes <- do.call(rbind,genes)$external_gene_name
-
-View(gwas_genes)
 gwas_genes <-unique(gwas_genes)
 gwas_genes<-gwas_genes[!is.na(gwas_genes) & gwas_genes!=""]
 
 ## write out file
 write.table(gwas_genes,file = "epigwas_genes.tsv", sep = "\t", col.names = FALSE,row.names = FALSE, quote=FALSE)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Test ensembl
-
-ensembl = useEnsembl(biomart="ensembl", dataset="btaurus_gene_ensembl")
-View(listFilters(ensembl))
-##T
-
-bos_genes <- getBM(attributes=c('ensembl_gene_id',
-'ensembl_transcript_id','hgnc_symbol',"external_gene_name",'chromosome_name','start_position','end_position'),  mart = ensembl)
-
-gwasResultsp05$CHR[gwasResultsp05$CHR=="30"]<-"MT"
-gwasResultsp05$CHR[gwasResultsp05$CHR=="31"]<-"X"
-
-gwas_with_genes <- gwasResultsp05 %>%
-  inner_join(bos_genes, by = c("CHR" = "chromosome_name")) %>%
-  filter(BP >= start_position & BP <= end_position)
