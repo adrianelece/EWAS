@@ -283,8 +283,8 @@ axisdf = don %>%
 
 ggplot(don, aes(x = BPcum, y = -log10(P))) +
   # Show all points
-  geom_point(aes(color = as.factor(CHR)), alpha = 0.8, size = 1.3) +
-  scale_color_manual(values = rep(c("grey", "skyblue"), 22)) +
+  geom_point(aes(color = as.factor(CHR)), alpha = 0.4, size = 1.3) +
+  scale_color_manual(values = rep(c("#FDE725FF","#008B53"),15)) +
   
   # Custom X axis:
   scale_x_continuous(
@@ -293,7 +293,7 @@ ggplot(don, aes(x = BPcum, y = -log10(P))) +
     
   ) +
   scale_y_continuous(expand = c(0, 0)) +  # Remove space between plot area and x axis
-  geom_point(data = subset(don, is_highlight == "yes"), color = "orange", size = 2) +
+  geom_point(data = subset(don, is_highlight == "yes"), color = "#440154FF", size = 2) +
   
   # Custom the theme:
   theme_bw() +
