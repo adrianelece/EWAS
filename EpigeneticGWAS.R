@@ -297,7 +297,35 @@ compGO<- compareCluster(geneCluster   = genes,
                         
 dotplot(compGO, showCategory = 10, title = "GO Enrichment Analysis")
 
-# Webgestalt
+# Hacer el enrichment con Webgestalt
+
+
+# Script Oscar
+
+ensembl_dataset = "btaurus_gene_ensembl" # ARS UCD 1.3
+window = 50000 # number of bases to search upstream and downstream the SNP position
+ensembl = biomaRt::useEnsembl(biomart="ensembl",dataset=ensembl_dataset)
+
+results = gwasResults
+results$Padj<-p.adjust( results$P, method="fdr")
+a
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Test ensembl
 
 ensembl = useEnsembl(biomart="ensembl", dataset="btaurus_gene_ensembl")
 View(listFilters(ensembl))
