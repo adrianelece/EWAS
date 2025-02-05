@@ -413,3 +413,35 @@ gwas_genes<-gwas_genes[!is.na(gwas_genes) & gwas_genes!=""]
 ## write out file
 write.table(gwas_genes,file = "epigwas_genes.tsv", sep = "\t", col.names = FALSE,row.names = FALSE, quote=FALSE)
 
+
+
+## DGAT region
+
+
+ensembl = useEnsembl(biomart="ensembl", dataset="btaurus_gene_ensembl")
+bos_genes <- getBM(attributes=c('ensembl_gene_id',
+'ensembl_transcript_id','hgnc_symbol',"external_gene_name",'chromosome_name','start_position','end_position'),  mart = ensembl)
+
+
+bos_genes_filtered <- bos_genes %>%
+  filter(str_starts(external_gene_name, "DGAT")) %>% 
+  dplyr::select(chromosome_name,start_position,end_position,external_gene_name) %>%
+    distinct()
+
+CpGtotal= as.data.frame(t(CpG_imputed_to_merge))
+CpGtotal$Probe_ID = rownames(CpGtotal)
+
+positionsmanifest = manifest %>% dplyr::select(Probe_ID,CHR,MAPINFO)
+
+CpGmapped = merge(CpGtotal, positionsmanifest, by ="Probe_ID")
+
+window = 50000 # number of bases to search upstream and downstream the SNP position
+
+CpGmapped_dgat = CpGmapped %>% dplyr::filter(CHR %in% c(bos_genes_filtered$chromosome_name))
+
+
+# Join CpGmapped_dagt with bos_genes_filtered based on chromosome
+filtered_data <- CpGmapped_dgat %>%
+  left_join(bos_genes_filtered, by = c("CHR" = "chromosome_name")) %>%
+  filter(MAPINFO >= start_position & MAPINFO <= end_position) %>%
+  dplyr::select(-chromosome_name, -start_position, -end_position)
