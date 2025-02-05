@@ -250,14 +250,20 @@ print("#########")
 gwasResults$CHR[gwasResults$CHR=="30"]<-"MT"
 gwasResults$CHR[gwasResults$CHR=="31"]<-"X"
 
+bonferronithreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_bonf - 0.05)),"P"]))
+fdrthreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_FDR - 0.05)),"P"]))
+
+gwasResults = gwasResults %>% 
+  filter(CHR!=0)
+
 don <- gwasResults %>% 
-  mutate(CHR = as.character(CHR)) %>%
+  #mutate(CHR = as.character(CHR)) %>%
   # Compute chromosome size
   group_by(CHR) %>% 
   dplyr::summarise(chr_len=max(BP)) %>% 
   
   # Calculate cumulative position of each chromosome
-  mutate(tot=cumsum(chr_len)-chr_len) %>%
+  mutate(tot=cumsum(as.numeric(chr_len))-as.numeric(chr_len)) %>%
   dplyr::select(-chr_len) %>%
   
   # Add this info to the initial dataset
@@ -270,31 +276,37 @@ don <- gwasResults %>%
 
 axisdf = don %>%
   group_by(CHR) %>%
-  summarize(center=( max(BPcum) + min(BPcum) ) / 2 )
+  dplyr::summarize(center=( max(BPcum) + min(BPcum) ) / 2 )
 
 
-ggplot(don, aes(x=BPcum, y=-log10(P))) +
+
+
+ggplot(don, aes(x = BPcum, y = -log10(P))) +
+  # Show all points
+  geom_point(aes(color = as.factor(CHR)), alpha = 0.8, size = 1.3) +
+  scale_color_manual(values = rep(c("grey", "skyblue"), 22)) +
+  
+  # Custom X axis:
+  scale_x_continuous(
+    labels = c(1:29,"MT"),
+    breaks = axisdf$center,
     
-    # Show all points
-    geom_point( aes(color=as.factor(CHR)), alpha=0.8, size=1.3) +
-    scale_color_manual(values = rep(c("grey", "skyblue"), 22 )) +
-    
-    # custom X axis:
-    scale_x_continuous( label = axisdf$CHR, breaks= axisdf$center ) +
-    scale_y_continuous(expand = c(0, 0) ) +     # remove space between plot area and x axis
-    geom_point(data=subset(don, is_highlight=="yes"), color="orange", size=2) +
-    # Custom the theme:
-    theme_bw() +
-    theme( 
-      legend.position="none",
-      panel.border = element_blank(),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank()
-    )
-
-
-
-
+  ) +
+  scale_y_continuous(expand = c(0, 0)) +  # Remove space between plot area and x axis
+  geom_point(data = subset(don, is_highlight == "yes"), color = "orange", size = 2) +
+  
+  # Custom the theme:
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = -log10(fdrthreshold), linetype = "dashed", color = "blue") +
+  xlab("Chromosome") +
+  ylim(0,20)
 
 
 
