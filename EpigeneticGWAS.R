@@ -324,6 +324,28 @@ for (snp_name in rownames(results)) {
                                      values=list(snp$CHR,snp$BP-window,snp$BP+window),
                                      mart=ensembl)
 }
+test = biomaRt::getBM(c('ensembl_gene_id',
+                                       'entrezgene_id',
+                                       'external_gene_name',
+                                       "chromosome_name",
+                                       'start_position',
+                                       'end_position',
+                                       'uniprotsptrembl',
+                                       'uniprotswissprot'),
+                                    mart = ensembl)
+
+gene = data.frame()
+for(i in 1:nrow(results)){
+  for(j in 1:nrow(test)){
+    if(results[i,"CHR"]==test[j,"chromsome_name"] && 
+      results[i,"BP"]>=test[j,"start_position"] &&
+      results[i,"BP"]<=test[j,"start_position"]){
+    tmp = test[j,"external_gene_name"]  
+    gene = cbind(gene,tmp)  
+    }
+  }
+}
+
 
 gwas_genes <- ldply(genes, function(x) {
   rbind.data.frame(x)
