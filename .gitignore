@@ -1,0 +1,13 @@
+/ewasimputed.kinship
+/ewasimputed_GWAS.results
+/ewasimputed_GWAS.resultsBonferroni
+/ewasimputed_GWAS.resultsFDR
+/ewasimputed_kinship_heatmap.pdf
+/ewasimputed_manhattan.png
+/ewasimputed_qqplot.png
+/Ewas_ChipSeeker.tsv
+/Genes_in_peak_ewas.tsv
+/gwasResults.tsv
+/gwasResults_significativo_Bonferroni.tsv
+/kinship_matrix.tsv
+/plot.png
