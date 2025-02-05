@@ -247,6 +247,61 @@ print("#########")
 print("## END ##")
 print("#########")
 
+gwasResults$CHR[gwasResults$CHR=="30"]<-"MT"
+gwasResults$CHR[gwasResults$CHR=="31"]<-"X"
+
+don <- gwasResults %>% 
+  mutate(CHR = as.character(CHR)) %>%
+  # Compute chromosome size
+  group_by(CHR) %>% 
+  dplyr::summarise(chr_len=max(BP)) %>% 
+  
+  # Calculate cumulative position of each chromosome
+  mutate(tot=cumsum(chr_len)-chr_len) %>%
+  dplyr::select(-chr_len) %>%
+  
+  # Add this info to the initial dataset
+  left_join(gwasResults, ., by=c("CHR"="CHR")) %>%
+  
+  # Add a cumulative position of each SNP
+  arrange(CHR, BP) %>%
+  mutate(BPcum=BP+tot) %>%
+  mutate(is_highlight=ifelse(Padj_bonf <= 0.05, "yes", "no"))
+
+axisdf = don %>%
+  group_by(CHR) %>%
+  summarize(center=( max(BPcum) + min(BPcum) ) / 2 )
+
+
+ggplot(don, aes(x=BPcum, y=-log10(P))) +
+    
+    # Show all points
+    geom_point( aes(color=as.factor(CHR)), alpha=0.8, size=1.3) +
+    scale_color_manual(values = rep(c("grey", "skyblue"), 22 )) +
+    
+    # custom X axis:
+    scale_x_continuous( label = axisdf$CHR, breaks= axisdf$center ) +
+    scale_y_continuous(expand = c(0, 0) ) +     # remove space between plot area and x axis
+    geom_point(data=subset(don, is_highlight=="yes"), color="orange", size=2) +
+    # Custom the theme:
+    theme_bw() +
+    theme( 
+      legend.position="none",
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank()
+    )
+
+
+
+
+
+
+
+
+
+
+
 gwasResultsp05 = gwasResults %>% filter(Padj_bonf < 0.05)
 
 ewas_results_chipseeker = data.frame(
