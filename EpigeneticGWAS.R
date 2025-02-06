@@ -281,21 +281,40 @@ axisdf = don %>%
 
 
 
+# Assuming 'don' is your data frame and it has columns: BPcum, P, CHR, is_highlight
 
+# Create the chrom_color column
+don <- don %>%
+  mutate(chrom_color = case_when(
+    is_highlight == "yes" & CHR %% 2 == 1 ~ "#410739",    # Highlighted and odd CHR
+    is_highlight == "yes" ~ "#f8f400",                   # Highlighted and even CHR or character
+    is.character(CHR) ~ "#3A7D44",                       # CHR is a character
+    CHR %% 2 == 1 ~ "#9DC08B",                           # Odd CHR
+    TRUE ~ "#3A7D44"                                     # Default (even CHR)
+  ),
+  alpha_case = case_when(
+    is_highlight == "yes" & CHR %% 2 == 1 ~ 1,    # Highlighted and odd CHR
+    is_highlight == "yes" ~ 1,                   # Highlighted and even CHR or character
+    is.character(CHR) ~ 0.5,                       # CHR is a character
+    CHR %% 2 == 1 ~ 0.5,                           # Odd CHR
+    TRUE ~ 0.5 ))
+
+# Ensure CHR is treated as a factor
+don$CHR <- as.factor(don$CHR)
+
+# Create the plot
 ggplot(don, aes(x = BPcum, y = -log10(P))) +
-  # Show all points
-  geom_point(aes(color = as.factor(CHR)), alpha = 0.4, size = 1.3) +
-  scale_color_manual(values = rep(c("#FDE725FF","#008B53"),15)) +
-  
+  # Show all points with custom colors
+  geom_point(aes(color = chrom_color, alpha = alpha_case), size = 1.3) +
+  scale_color_identity() +  # Use the colors directly from the chrom_color column
+
   # Custom X axis:
   scale_x_continuous(
-    labels = c(1:29,"MT"),
-    breaks = axisdf$center,
-    
+    labels = c(1:29, "MT"),
+    breaks = axisdf$center
   ) +
   scale_y_continuous(expand = c(0, 0)) +  # Remove space between plot area and x axis
-  geom_point(data = subset(don, is_highlight == "yes"), color = "#440154FF", size = 2) +
-  
+
   # Custom the theme:
   theme_bw() +
   theme(
@@ -304,10 +323,11 @@ ggplot(don, aes(x = BPcum, y = -log10(P))) +
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   ) +
-  geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dashed", color = "red") +
-  geom_hline(yintercept = -log10(fdrthreshold), linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dotdash", color = "black") +
+  geom_hline(yintercept = -log10(fdrthreshold), linetype = "dotted", color = "black") +
   xlab("Chromosome") +
-  ylim(0,20)
+  ylim(0, 20)
+
 
 
 print("#########")
