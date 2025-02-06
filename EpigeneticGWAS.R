@@ -25,7 +25,6 @@ library(viridis)
 library(org.Bt.eg.db)
 library(biomaRt)
 library(fuzzyjoin)
-library("plyr")
 
 ## include common functions
 
@@ -210,7 +209,7 @@ gwasResults <- res[,c("SNP","Chr","Pos","Pval")]
 
 
 # add FDR value - multiple testing correction
-gwasResults$FDR <- p.adjust(gwasResults$Pval, method="fdr" )
+gwasResults$FDR <- p.adjust(gwasResults$Pval, method="fdr")
 gwasResults$bonferroni <- p.adjust(gwasResults$Pval, method = "bonferroni")
 
 names(gwasResults) <- c("SNP","CHR","BP","P","Padj_FDR", "Padj_bonf")
@@ -246,73 +245,6 @@ dev.off()
 print("#########")
 print("## END ##")
 print("#########")
-
-gwasResults$CHR[gwasResults$CHR=="30"]<-"MT"
-gwasResults$CHR[gwasResults$CHR=="31"]<-"X"
-
-bonferronithreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_bonf - 0.05)),"P"]))
-fdrthreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_FDR - 0.05)),"P"]))
-
-gwasResults = gwasResults %>% 
-  filter(CHR!=0)
-
-don <- gwasResults %>% 
-  #mutate(CHR = as.character(CHR)) %>%
-  # Compute chromosome size
-  group_by(CHR) %>% 
-  dplyr::summarise(chr_len=max(BP)) %>% 
-  
-  # Calculate cumulative position of each chromosome
-  mutate(tot=cumsum(as.numeric(chr_len))-as.numeric(chr_len)) %>%
-  dplyr::select(-chr_len) %>%
-  
-  # Add this info to the initial dataset
-  left_join(gwasResults, ., by=c("CHR"="CHR")) %>%
-  
-  # Add a cumulative position of each SNP
-  arrange(CHR, BP) %>%
-  mutate(BPcum=BP+tot) %>%
-  mutate(is_highlight=ifelse(Padj_bonf <= 0.05, "yes", "no"))
-
-axisdf = don %>%
-  group_by(CHR) %>%
-  dplyr::summarize(center=( max(BPcum) + min(BPcum) ) / 2 )
-
-
-
-
-ggplot(don, aes(x = BPcum, y = -log10(P))) +
-  # Show all points
-  geom_point(aes(color = as.factor(CHR)), alpha = 0.4, size = 1.3) +
-  scale_color_manual(values = rep(c("#FDE725FF","#008B53"),15)) +
-  
-  # Custom X axis:
-  scale_x_continuous(
-    labels = c(1:29,"MT"),
-    breaks = axisdf$center,
-    
-  ) +
-  scale_y_continuous(expand = c(0, 0)) +  # Remove space between plot area and x axis
-  geom_point(data = subset(don, is_highlight == "yes"), color = "#440154FF", size = 2) +
-  
-  # Custom the theme:
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    panel.border = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
-  ) +
-  geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dashed", color = "red") +
-  geom_hline(yintercept = -log10(fdrthreshold), linetype = "dashed", color = "blue") +
-  xlab("Chromosome") +
-  ylim(0,20)
-
-
-
-
-
-
 
 gwasResultsp05 = gwasResults %>% filter(Padj_bonf < 0.05)
 
@@ -374,19 +306,13 @@ ensembl_dataset = "btaurus_gene_ensembl" # ARS UCD 1.3
 window = 50000 # number of bases to search upstream and downstream the SNP position
 ensembl = biomaRt::useEnsembl(biomart="ensembl",dataset=ensembl_dataset)
 
-results = as.data.frame(gwasResultsp05)
+results = gwasResultsp05
 rownames(results) <- results$SNP
 results$CHR[results$CHR=="30"]<-"MT"
 results$CHR[results$CHR=="31"]<-"X"
-
-
 genes = list()
-total_snps = nrow(results)
 
-for(i in seq_along(rownames(results))) {
-  snp_name = rownames(results)[i]
-  message(sprintf("Processing SNP %d of %d: %s", i, total_snps, snp_name))
-  
+for (snp_name in rownames(results)) {
   snp = results[snp_name,]
   genes[[snp_name]] = biomaRt::getBM(c('ensembl_gene_id',
                                        'entrezgene_id',
@@ -407,6 +333,8 @@ gwas_genes <- ldply(genes, function(x) {
 gwas_genes <- gwas_genes[!is.na(gwas_genes$external_gene_name) & gwas_genes$external_gene_name != "",]
 
 gwas_genes <- do.call(rbind,genes)$external_gene_name
+
+View(gwas_genes)
 gwas_genes <-unique(gwas_genes)
 gwas_genes<-gwas_genes[!is.na(gwas_genes) & gwas_genes!=""]
 
@@ -414,34 +342,70 @@ gwas_genes<-gwas_genes[!is.na(gwas_genes) & gwas_genes!=""]
 write.table(gwas_genes,file = "epigwas_genes.tsv", sep = "\t", col.names = FALSE,row.names = FALSE, quote=FALSE)
 
 
-
-## DGAT region
-
+# Test ensembl
 
 ensembl = useEnsembl(biomart="ensembl", dataset="btaurus_gene_ensembl")
+View(listFilters(ensembl))
+##T
+
 bos_genes <- getBM(attributes=c('ensembl_gene_id',
 'ensembl_transcript_id','hgnc_symbol',"external_gene_name",'chromosome_name','start_position','end_position'),  mart = ensembl)
 
-
 bos_genes_filtered <- bos_genes %>%
-  filter(str_starts(external_gene_name, "DGAT")) %>% 
-  dplyr::select(chromosome_name,start_position,end_position,external_gene_name) %>%
-    distinct()
+  filter(str_starts(external_gene_name, "DGAT")) %>%
+  distinct()
 
-CpGtotal= as.data.frame(t(CpG_imputed_to_merge))
-CpGtotal$Probe_ID = rownames(CpGtotal)
+bos_genes_dgat1 = bos_genes_filtered[1,] %>%
+  dplyr::select(external_gene_name,chromosome_name,start_position,end_position)
 
-positionsmanifest = manifest %>% dplyr::select(Probe_ID,CHR,MAPINFO)
-
-CpGmapped = merge(CpGtotal, positionsmanifest, by ="Probe_ID")
-
-window = 50000 # number of bases to search upstream and downstream the SNP position
-
-CpGmapped_dgat = CpGmapped %>% dplyr::filter(CHR %in% c(bos_genes_filtered$chromosome_name))
+gwasResultsp05$CHR[gwasResultsp05$CHR=="30"]<-"MT"
+gwasResultsp05$CHR[gwasResultsp05$CHR=="31"]<-"X"
 
 
-# Join CpGmapped_dagt with bos_genes_filtered based on chromosome
+CpGtraspose = as.data.frame(t(CpG_imputed_to_merge))
+CpGtraspose$Probe_ID = rownames(CpGtraspose)
+
+manifest_clean = manifest %>% dplyr::select(Probe_ID,CHR,MAPINFO)
+CpGmapped = merge(CpGtraspose,manifest_clean,by="Probe_ID")
+
+CpGmapped_dgat = CpGmapped %>% 
+  dplyr::filter(CHR %in% bos_genes_dgat1$chromosome_name)
+
+
 filtered_data <- CpGmapped_dgat %>%
-  left_join(bos_genes_filtered, by = c("CHR" = "chromosome_name")) %>%
+  left_join(bos_genes_dgat1, by = c("CHR" = "chromosome_name")) %>%
   filter(MAPINFO >= start_position & MAPINFO <= end_position) %>%
   dplyr::select(-chromosome_name, -start_position, -end_position)
+
+
+
+
+filter_cpg_in_genes <- function(cpg_data, gene_data) {
+  # First ensure chromosome naming is consistent
+  # Remove any "chr" prefix if present in either dataset
+  cpg_data <- cpg_data %>%
+    mutate(CHR = gsub("chr", "", CHR))
+  
+  gene_data <- gene_data %>%
+    mutate(chromosome_name = gsub("chr", "", chromosome_name))
+  
+  # Create the filtered dataset
+  filtered_cpg <- cpg_data %>%
+    # Join with genes data for each chromosome
+    inner_join(
+      gene_data,
+      by = c("CHR" = "chromosome_name")
+    ) %>%
+    # Keep only CpGs that fall within gene boundaries
+    filter(
+      MAPINFO >= start_position,
+      MAPINFO <= end_position
+    ) %>%
+    # Remove the gene position columns we don't need anymore
+    select(-start_position, -end_position) %>%
+    # Remove duplicate CpG entries if a CpG falls within multiple genes
+    distinct(CHR, MAPINFO, .keep_all = TRUE)
+  
+  return(filtered_cpg)
+}
+filtered_data <- filter_cpg_in_genes(CpGmapped_dgat, bos_genes_filtered)
