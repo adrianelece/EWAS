@@ -487,6 +487,23 @@ for(i in 1:nrow(filtered_data)){
 CpGtraspose_means = CpGtraspose %>%
   rownames_to_column(var = "rowname") %>%
   filter(!(rowname == "MUESTRA" | grepl("^ctl", rowname))) %>%
-  column_to_rownames(var = "rowname")
+  column_to_rownames(var = "rowname") %>%
+  mutate(across(-ncol(.), as.numeric))
 
-meth_means = apply(CpGtraspose_means,2,mean)
+meth_means = apply(CpGtraspose_means[,-ncol(CpGtraspose_means)],2,mean)
+
+
+long_data <- filtered_data %>%
+  pivot_longer(
+    cols = -c(Probe_ID, start_position, end_position, CHR, MAPINFO, external_gene_name),
+    names_to = "Sample_ID",
+    values_to = "Value"
+  ) %>%
+  dplyr::select(Probe_ID,Value)
+ggplot(long_data, aes(y = Value, colour = Probe_ID)) +
+  geom_density() +
+  labs(title = "Density Plot of SNP Values",
+      x = "Value",
+      y = "Density",
+      colour = "SNP (Probe_ID)") +
+  theme_minimal()
