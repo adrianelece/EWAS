@@ -371,41 +371,10 @@ CpGmapped = merge(CpGtraspose,manifest_clean,by="Probe_ID")
 CpGmapped_dgat = CpGmapped %>% 
   dplyr::filter(CHR %in% bos_genes_dgat1$chromosome_name)
 
-
+window = 10000
 filtered_data <- CpGmapped_dgat %>%
-  left_join(bos_genes_dgat1, by = c("CHR" = "chromosome_name")) %>%
-  filter(MAPINFO >= start_position & MAPINFO <= end_position) %>%
-  dplyr::select(-chromosome_name, -start_position, -end_position)
-
-
-
-
-filter_cpg_in_genes <- function(cpg_data, gene_data) {
-  # First ensure chromosome naming is consistent
-  # Remove any "chr" prefix if present in either dataset
-  cpg_data <- cpg_data %>%
-    mutate(CHR = gsub("chr", "", CHR))
-  
-  gene_data <- gene_data %>%
-    mutate(chromosome_name = gsub("chr", "", chromosome_name))
-  
-  # Create the filtered dataset
-  filtered_cpg <- cpg_data %>%
-    # Join with genes data for each chromosome
-    inner_join(
-      gene_data,
-      by = c("CHR" = "chromosome_name")
-    ) %>%
-    # Keep only CpGs that fall within gene boundaries
-    filter(
-      MAPINFO >= start_position,
-      MAPINFO <= end_position
-    ) %>%
-    # Remove the gene position columns we don't need anymore
-    select(-start_position, -end_position) %>%
-    # Remove duplicate CpG entries if a CpG falls within multiple genes
-    distinct(CHR, MAPINFO, .keep_all = TRUE)
-  
-  return(filtered_cpg)
-}
-filtered_data <- filter_cpg_in_genes(CpGmapped_dgat, bos_genes_filtered)
+  left_join(bos_genes_dgat1, by = c("CHR" = "chromosome_name"))  %>%
+  filter(MAPINFO >= start_position-window & MAPINFO <= end_position+window) 
+  #%>%
+  #filter(abs(MAPINFO-start_position)<5000 & abs(MAPINFO-end_position)<5000)
+  #dplyr::select(-chromosome_name, -start_position, -end_position)
