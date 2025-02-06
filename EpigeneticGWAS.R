@@ -242,6 +242,74 @@ qq(gwasResults$P)
 dev.off()
 
 
+
+
+bonferronithreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_bonf - 0.05)),"P"]))
+fdrthreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_FDR - 0.05)),"P"]))
+
+gwasResults = gwasResults %>% 
+  filter(CHR!=0)
+
+
+bonferronithreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_bonf - 0.05)),"P"]))
+fdrthreshold = unname(unlist(gwasResults[which.min(abs(gwasResults$Padj_FDR - 0.05)),"P"]))
+
+gwasResults = gwasResults %>% 
+  filter(CHR!=0)
+
+don <- gwasResults %>% 
+  #mutate(CHR = as.character(CHR)) %>%
+  # Compute chromosome size
+  group_by(CHR) %>% 
+  dplyr::summarise(chr_len=max(BP)) %>% 
+  
+  # Calculate cumulative position of each chromosome
+  mutate(tot=cumsum(as.numeric(chr_len))-as.numeric(chr_len)) %>%
+  dplyr::select(-chr_len) %>%
+  
+  # Add this info to the initial dataset
+  left_join(gwasResults, ., by=c("CHR"="CHR")) %>%
+  
+  # Add a cumulative position of each SNP
+  arrange(CHR, BP) %>%
+  mutate(BPcum=BP+tot) %>%
+  mutate(is_highlight=ifelse(Padj_bonf <= 0.05, "yes", "no"))
+
+axisdf = don %>%
+  group_by(CHR) %>%
+  dplyr::summarize(center=( max(BPcum) + min(BPcum) ) / 2 )
+
+
+
+
+ggplot(don, aes(x = BPcum, y = -log10(P))) +
+  # Show all points
+  geom_point(aes(color = as.factor(CHR)), alpha = 0.4, size = 1.3) +
+  scale_color_manual(values = rep(c("#FDE725FF","#008B53"),15)) +
+  
+  # Custom X axis:
+  scale_x_continuous(
+    labels = c(1:29,"MT"),
+    breaks = axisdf$center,
+    
+  ) +
+  scale_y_continuous(expand = c(0, 0)) +  # Remove space between plot area and x axis
+  geom_point(data = subset(don, is_highlight == "yes"), color = "#440154FF", size = 2) +
+  
+  # Custom the theme:
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = -log10(fdrthreshold), linetype = "dashed", color = "blue") +
+  xlab("Chromosome") +
+  ylim(0,20)
+
+
 print("#########")
 print("## END ##")
 print("#########")
@@ -375,6 +443,4 @@ window = 10000
 filtered_data <- CpGmapped_dgat %>%
   left_join(bos_genes_dgat1, by = c("CHR" = "chromosome_name"))  %>%
   filter(MAPINFO >= start_position-window & MAPINFO <= end_position+window) 
-  #%>%
-  #filter(abs(MAPINFO-start_position)<5000 & abs(MAPINFO-end_position)<5000)
-  #dplyr::select(-chromosome_name, -start_position, -end_position)
+
