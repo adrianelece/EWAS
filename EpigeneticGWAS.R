@@ -478,3 +478,15 @@ filtered_data <- CpGmapped_dgat %>%
   left_join(bos_genes_dgat1, by = c("CHR" = "chromosome_name"))  %>%
   filter(MAPINFO >= start_position-window & MAPINFO <= end_position+window) 
 
+### Estimate average methylation
+for(i in 1:nrow(filtered_data)){
+  assign(filtered_data$Probe_ID[i],filtered_data[i,])
+  write.table(t(filtered_data[i,]),file = paste0("blupf90/DGAT1_",filtered_data$Probe_ID[i],".tsv"),
+              quote=F,col.names = F,row.names=F,sep="\t")
+}
+CpGtraspose_means = CpGtraspose %>%
+  rownames_to_column(var = "rowname") %>%
+  filter(!(rowname == "MUESTRA" | grepl("^ctl", rowname))) %>%
+  column_to_rownames(var = "rowname")
+
+meth_means = apply(CpGtraspose_means,2,mean)
