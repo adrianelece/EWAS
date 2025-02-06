@@ -286,18 +286,29 @@ axisdf = don %>%
 # Create the chrom_color column
 don <- don %>%
   mutate(chrom_color = case_when(
-    is_highlight == "yes" & CHR %% 2 == 1 ~ "#410739",    # Highlighted and odd CHR
-    is_highlight == "yes" ~ "#f8f400",                   # Highlighted and even CHR or character
-    is.character(CHR) ~ "#3A7D44",                       # CHR is a character
-    CHR %% 2 == 1 ~ "#9DC08B",                           # Odd CHR
-    TRUE ~ "#3A7D44"                                     # Default (even CHR)
+    is_highlight == "yes" & CHR %% 2 == 1 ~ "#597445",    # Highlighted and odd CHR
+    is_highlight == "yes" ~ "#e68e3c",                   # Highlighted and even CHR or character
+    CHR == 31 ~ "#FFE6A9",                       # CHR is a character
+    CHR %% 2 == 1 ~ "#729762",                           # Odd CHR
+    TRUE ~ "#FFE6A9"                                     # Default (even CHR)
   ),
   alpha_case = case_when(
     is_highlight == "yes" & CHR %% 2 == 1 ~ 1,    # Highlighted and odd CHR
     is_highlight == "yes" ~ 1,                   # Highlighted and even CHR or character
-    is.character(CHR) ~ 0.5,                       # CHR is a character
-    CHR %% 2 == 1 ~ 0.5,                           # Odd CHR
-    TRUE ~ 0.5 ))
+    CHR == 31 ~ 0.3,                       # CHR is a character
+    CHR %% 2 == 1 ~ 0.3,                           # Odd CHR
+    TRUE ~ 0.3),
+  size_case = case_when(
+    is_highlight == "yes" & CHR %% 2 == 1 ~ 2.5,    # Highlighted and odd CHR
+    is_highlight == "yes" ~ 2.5,                   # Highlighted and even CHR or character
+    CHR == 31 ~ 2.3,                       # CHR is a character
+    CHR %% 2 == 1 ~ 2.3,                           # Odd CHR
+    TRUE ~ 2.3 ),
+    shape_case = case_when(
+      is_highlight == "yes" ~ 18,
+      TRUE ~ 16             # Highlighted and even CHR or character
+      )
+    )
 
 # Ensure CHR is treated as a factor
 don$CHR <- as.factor(don$CHR)
@@ -305,9 +316,10 @@ don$CHR <- as.factor(don$CHR)
 # Create the plot
 ggplot(don, aes(x = BPcum, y = -log10(P))) +
   # Show all points with custom colors
-  geom_point(aes(color = chrom_color, alpha = alpha_case), size = 1.3) +
+  geom_point(aes(color = chrom_color, alpha = alpha_case, shape = shape_case, size = size_case)) +
   scale_color_identity() +  # Use the colors directly from the chrom_color column
-
+  scale_shape_identity() +
+  scale_size_identity() +
   # Custom X axis:
   scale_x_continuous(
     labels = c(1:29, "MT"),
@@ -321,12 +333,14 @@ ggplot(don, aes(x = BPcum, y = -log10(P))) +
     legend.position = "none",
     panel.border = element_blank(),
     panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
+    panel.grid.minor.x = element_blank(),
+    text = element_text(size=25),
+    axis.text.x = element_text(size = 10)
   ) +
   geom_hline(yintercept = -log10(bonferronithreshold), linetype = "dotdash", color = "black") +
   geom_hline(yintercept = -log10(fdrthreshold), linetype = "dotted", color = "black") +
   xlab("Chromosome") +
-  ylim(0, 20)
+  ylim(0, 18)
 
 
 
