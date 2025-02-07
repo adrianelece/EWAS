@@ -154,6 +154,16 @@ fviz_pca_ind(res.pca,
              label = "none"
 )
 
+
+meth_pca<-prcomp(data.frame(t(CpG_imputed_to_merge[,-ncol(CpG_imputed_to_merge)])), scale = F)
+
+fviz_pca_ind(meth_pca,
+  col.ind = "cos2", # Color by the quality of representation
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE,     # Avoid text overlapping
+  label = "none"
+)
+
 #vec <- colnames(K) %in% CpG_file$RegistroGenealogico
 #K <- K[vec,vec]
 
@@ -447,8 +457,8 @@ write.table(gwas_genes,file = "epigwas_genes.tsv", sep = "\t", col.names = FALSE
 # Test ensembl
 
 ensembl = useEnsembl(biomart="ensembl", dataset="btaurus_gene_ensembl")
-View(listFilters(ensembl))
-##T
+#View(listFilters(ensembl))
+
 
 bos_genes <- getBM(attributes=c('ensembl_gene_id',
 'ensembl_transcript_id','hgnc_symbol',"external_gene_name",'chromosome_name','start_position','end_position'),  mart = ensembl)
@@ -479,11 +489,12 @@ filtered_data <- CpGmapped_dgat %>%
   filter(MAPINFO >= start_position-window & MAPINFO <= end_position+window) 
 
 ### Estimate average methylation
-for(i in 1:nrow(filtered_data)){
-  assign(filtered_data$Probe_ID[i],filtered_data[i,])
-  write.table(t(filtered_data[i,]),file = paste0("blupf90/DGAT1_",filtered_data$Probe_ID[i],".tsv"),
-              quote=F,col.names = F,row.names=F,sep="\t")
-}
+#for(i in 1:nrow(filtered_data)){
+#  assign(filtered_data$Probe_ID[i],filtered_data[i,])
+#  write.table(t(filtered_data[i,]),file = paste0("blupf90/DGAT1_",filtered_data$Probe_ID[i],".tsv"),
+#              quote=F,col.names = F,row.names=F,sep="\t")
+#}
+
 CpGtraspose_means = CpGtraspose %>%
   rownames_to_column(var = "rowname") %>%
   filter(!(rowname == "MUESTRA" | grepl("^ctl", rowname))) %>%
@@ -491,19 +502,39 @@ CpGtraspose_means = CpGtraspose %>%
   mutate(across(-ncol(.), as.numeric))
 
 meth_means = apply(CpGtraspose_means[,-ncol(CpGtraspose_means)],2,mean)
+meth_df <- data.frame(t(meth_means), stringsAsFactors = FALSE)
+common_cols <- intersect(names(meth_means), colnames(filtered_data))
+filtered_data_matched <- filtered_data[, common_cols, drop = FALSE]
+meth_df_matched <- meth_df[, common_cols, drop = FALSE]
+merged_data <- as.data.frame(t(rbind(filtered_data_matched, meth_df_matched)))
+merged_data$MUESTRA = rownames(merged_data)
+colnames(merged_data) = c(filtered_data$Probe_ID,"Avg","MUESTRA")
+## Preparar BLUP
+snpBLUP = X
+
+tmp = c()
+blupmatrix = data.frame("Sample"=NULL,"SNP"=NULL)
+for(i in 1:nrow(snpBLUP)){
+  tmp = unlist(unname(snpBLUP[i,] ))
+  blupmatrix[i,1] = rownames(snpBLUP)[i]
+  blupmatrix[i,2] = paste(tmp,collapse="")
+}
+
+sampleID = designmatrix %>% dplyr::select(RegistroGenealogico,MUESTRA)
+datosblup = merge(sampleID,merged_data,by="MUESTRA")
+
+datosblup_write = datosblup %>%
+  mutate(Media=1) %>%
+  dplyr::select(RegistroGenealogico,Media,cg287646953_BC21,cg287647051_BC21,cg287647433_TC11,Avg)
 
 
-long_data <- filtered_data %>%
-  pivot_longer(
-    cols = -c(Probe_ID, start_position, end_position, CHR, MAPINFO, external_gene_name),
-    names_to = "Sample_ID",
-    values_to = "Value"
-  ) %>%
-  dplyr::select(Probe_ID,Value)
-ggplot(long_data, aes(y = Value, colour = Probe_ID)) +
-  geom_density() +
-  labs(title = "Density Plot of SNP Values",
-      x = "Value",
-      y = "Density",
-      colour = "SNP (Probe_ID)") +
-  theme_minimal()
+pedi = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata Terneras/Pedigri_clean.tsv")
+pedi_clean = pedi %>%
+  dplyr::select(RegistroGenealogico,`ID dam`,`ID Sire`)
+
+setwd("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
+fwrite(datosblup_write,"blupf90/datosBlup.txt",quote=F,col.names=T,row.names=F,sep=" ")
+fwrite(blupmatrix,"blupf90/Genotipos.txt",quote=F,col.names=F,row.names=F,sep=" ")
+fwrite(pedi_clean,"blupf90/Pedigree.txt",quote=F,col.names=F,row.names=F,sep=" ")
+
+
