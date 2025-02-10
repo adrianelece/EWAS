@@ -1,0 +1,55 @@
+ name of parameter file?
+renf90_cg287646953_BC21.par
+     POST-GIBBSF90 ver. 3.15
+
+ Parameter file:             renf90_cg287646953_BC21.par
+ Data file:                  renf90.dat
+ Number of Traits             1
+ Number of Effects            2
+ Position of Observations      1
+ Position of Weights           0
+ Value of Missing Trait/Observation           0
+
+EFFECTS
+ #  type                position (2)        levels   [positions for nested]
+    1  cross-classified       2         1
+    2  cross-classified       3      1590
+
+ Residual (co)variance Matrix
+  1.0000    
+
+ Random Effect(s)    2
+ Type of Random Effect:      additive animal with unknown parent groups and inbreeding
+ Pedigree File:              renadd02.ped                                                                                                                                                                                                                                              
+ trait   effect    (CO)VARIANCES
+  1       2     1.000    
+
+ REMARKS
+  (1) Weight position 0 means no weights utilized
+  (2) Effect positions of 0 for some effects and traits means that such
+      effects are missing for specified traits
+ 
+ This program uses same weight for all traits
+ Data record length =            3
+  # parameters in gibbs_samples =           2
+ Read        1800  samples from round       20100  to      200000
+ Burn-in?
+ *** Try burn-in again! burn-in must be smaller than      179900
+ Burn-in?
+ Give n to read every n-th sample? (1 means read all samples)
+ Every n-th stored in gibbs_samples         100
+ # samples after burn-in =        1600
+ # samples after burn-in used =        1600
+
+                           ********   Monte Carlo Error by Time Series   ********
+  Pos. eff1 eff2 trt1 trt2        MCE        Mean             HPD             Effective       Median        Mode      Independent
+                                                         Interval (95%)       sample size                             chain size
+    1    2    2    1    1      0.40280E-05  0.14566E-03  0.19830E-04  0.28820E-03    322.8        0.13290E-03  0.11204E-03        8
+    2    0    0    1    1      0.29549E-05  0.56739E-03  0.42880E-03  0.68960E-03    522.8        0.56890E-03  0.54146E-03        8
+
+                           ********   Posterior Standard Deviation   ********
+  Pos. eff1 eff2 trt1 trt2        PSD        Mean             PSD             Geweke            Autocorrelations      Independent
+                                                         Interval (95%)       diagnostic   lag: 1       10       50    # batches
+    1    2    2    1    1      0.72396E-04  0.14566E-03  0.37591E-05  0.28755E-03     0.07      0.653   -0.012    0.024       200
+    2    0    0    1    1      0.67587E-04  0.56739E-03  0.43492E-03  0.69986E-03    -0.00      0.351   -0.043    0.009       200
+ Choose a graph for samples (= 1) or histogram (= 2); or exit (= 0)

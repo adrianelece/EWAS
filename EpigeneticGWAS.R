@@ -25,6 +25,7 @@ library(viridis)
 library(org.Bt.eg.db)
 library(biomaRt)
 library(fuzzyjoin)
+library(FactoMineR)
 
 ## include common functions
 
@@ -155,14 +156,9 @@ fviz_pca_ind(res.pca,
 )
 
 
-meth_pca<-prcomp(data.frame(t(CpG_imputed_to_merge[,-ncol(CpG_imputed_to_merge)])), scale = F)
 
-fviz_pca_ind(meth_pca,
-  col.ind = "cos2", # Color by the quality of representation
-  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
-  repel = TRUE,     # Avoid text overlapping
-  label = "none"
-)
+
+
 
 #vec <- colnames(K) %in% CpG_file$RegistroGenealogico
 #K <- K[vec,vec]
@@ -206,8 +202,34 @@ print("Running epiGWAS ...")
 res <- amm_gwas(Y = Y, X = CpG_matrix, K = K, use.SNP_INFO = T)
 
 
+metanames = merge(merge(namescoded %>% mutate(MUESTRA = paste0("Sample_",MUESTRA),
+                            cib = IDENTIFICACION)
+                             %>% dplyr::select(MUESTRA,cib),
+      gestacion  %>% dplyr::select(cib,RegistroGenealogico),
+      by = "cib"),Y %>% 
+        rownames_to_column("RegistroGenealogico"), by = "RegistroGenealogico") %>%
+  distinct()
 
 
+
+data_meth_pca = CpG_imputed_to_merge[,-ncol(CpG_imputed_to_merge)] %>% 
+  rownames_to_column("MUESTRA") %>%
+  dplyr::select(starts_with("cg"),"MUESTRA") %>%
+  left_join(metanames, by = "MUESTRA") %>%
+  na.omit() %>%
+  dplyr::select(starts_with("cg"),"as.vector(as.numeric(as.factor(filtered_CpG_file$Dam)) - 1)")
+
+colnames(data_meth_pca)[ncol(data_meth_pca)] = "LactationStatus"
+
+
+meth_pca<-prcomp(CpG_matrix, scale = F)
+
+fviz_pca_ind(meth_pca,
+  col.ind = "cos2", # Color by the quality of representation
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE,     # Avoid text overlapping
+  label = "none"
+)
 ###########
 ### RESULTS
 ###########
@@ -528,11 +550,12 @@ datosblup_write = datosblup %>%
   dplyr::select(RegistroGenealogico,Media,cg287646953_BC21,cg287647051_BC21,cg287647433_TC11,Avg)
 
 
-pedi = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata Terneras/Pedigri_clean.tsv")
+#pedi = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata Terneras/Pedigri_clean.tsv")
+pedi = fread("C:/Users/alopez.catalina/Nextcloud/Documents/Rumigen/Metadata\ Terneras/Pedigri_clean.tsv")
 pedi_clean = pedi %>%
   dplyr::select(RegistroGenealogico,`ID dam`,`ID Sire`)
 
-setwd("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
+#setwd("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
 fwrite(datosblup_write,"blupf90/datosBlup.txt",quote=F,col.names=T,row.names=F,sep=" ")
 fwrite(blupmatrix,"blupf90/Genotipos.txt",quote=F,col.names=F,row.names=F,sep=" ")
 fwrite(pedi_clean,"blupf90/Pedigree.txt",quote=F,col.names=F,row.names=F,sep=" ")
