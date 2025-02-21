@@ -26,6 +26,7 @@ library(org.Bt.eg.db)
 library(biomaRt)
 library(fuzzyjoin)
 library(FactoMineR)
+library(jsonlite)
 
 ## include common functions
 
@@ -86,8 +87,15 @@ subset_gestacion <- gestacion %>%
   ungroup()
 
 
+
+
 designmatrix = merge(subset_gestacion,namescoded, by.x="cib",by.y="IDENTIFICACION")
 designmatrix$MUESTRA = paste0("Sample_",designmatrix$MUESTRA)
+
+#pedi = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata Terneras/Pedigri_clean.tsv")
+pedi = fread("C:/Users/alopez.catalina/Nextcloud/Documents/Rumigen/Metadata\ Terneras/Pedigri_clean.tsv")
+pedi_clean = pedi %>%
+  dplyr::select(RegistroGenealogico,`ID dam`,`ID Sire`)
 
 
 # Merge metadata and methylation information
@@ -119,7 +127,9 @@ snp_vec = snpMatrix$V1
 design_vec <- ewasfile$RegistroGenealogico
 
 common_pos = intersect(snp_vec,design_vec)
-  
+
+
+
 
 
 ## kinship matrix
@@ -128,6 +138,13 @@ X = snpMatrix[which(snpMatrix$V1 %in% common_pos),-1]
 #X <- as.data.frame(snpMatrix[,-1])
 #colnames(X) <- gsub("\\_[A-Z]{1}$","",colnames(X))
 rownames(X) <- unname(unlist(snpMatrix[which(snpMatrix$V1 %in% common_pos),1]))
+X = as.data.frame(X)
+#mapsnp = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata\ Terneras/QCRESULT202410.prn")
+mapsnp = fread("C:/Users/alopez.catalina/Nextcloud/Documents/Rumigen/Metadata\ Terneras/QCRESULT202410.prn")
+removeSNP <- which(mapsnp$sel_3 == 0)
+X <- X[, -removeSNP]
+rownames(X) <- unname(unlist(snpMatrix[which(snpMatrix$V1 %in% common_pos),1]))
+cleanmap = mapsnp[-removeSNP,] %>% dplyr::select(-sel_3)
 
 #vec <- rownames(X) %in% CpG_file$RegistroGenealogico
 #X = X[vec, ]
@@ -154,11 +171,6 @@ fviz_pca_ind(res.pca,
              repel = TRUE,     # Avoid text overlapping
              label = "none"
 )
-
-
-
-
-
 
 #vec <- colnames(K) %in% CpG_file$RegistroGenealogico
 #K <- K[vec,vec]
@@ -205,31 +217,49 @@ res <- amm_gwas(Y = Y, X = CpG_matrix, K = K, use.SNP_INFO = T)
 metanames = merge(merge(namescoded %>% mutate(MUESTRA = paste0("Sample_",MUESTRA),
                             cib = IDENTIFICACION)
                              %>% dplyr::select(MUESTRA,cib),
-      gestacion  %>% dplyr::select(cib,RegistroGenealogico),
-      by = "cib"),Y %>% 
-        rownames_to_column("RegistroGenealogico"), by = "RegistroGenealogico") %>%
-  distinct()
+      subset_gestacion  %>% dplyr::select(cib,RegistroGenealogico,Dam),
+      by = "cib"),pedi,by="RegistroGenealogico")
 
+metanames <- metanames %>%
+  mutate(Month = format(as.Date(BirthDate, format = "%d/%m/%Y"), "%m"))
 
-
-data_meth_pca = CpG_imputed_to_merge[,-ncol(CpG_imputed_to_merge)] %>% 
+data_meth_pca <- CpG_imputed_to_merge[, -ncol(CpG_imputed_to_merge)] %>% 
   rownames_to_column("MUESTRA") %>%
-  dplyr::select(starts_with("cg"),"MUESTRA") %>%
+  dplyr::select(starts_with("cg"), "MUESTRA") %>%
   left_join(metanames, by = "MUESTRA") %>%
   na.omit() %>%
-  dplyr::select(starts_with("cg"),"as.vector(as.numeric(as.factor(filtered_CpG_file$Dam)) - 1)")
+  dplyr::select(-c(MUESTRA, RegistroGenealogico, cib,Country,"ID dam"))
 
-colnames(data_meth_pca)[ncol(data_meth_pca)] = "LactationStatus"
+fwrite(data_meth_pca, "data_meth_pca.txt",sep="\t",quote=F,col.names=T,row.names=F)
 
 
-meth_pca<-prcomp(CpG_matrix, scale = F)
+meth_pca <- prcomp(data_meth_pca[, -((ncol(data_meth_pca)-3):ncol(data_meth_pca))], scale = TRUE)
 
 fviz_pca_ind(meth_pca,
-  col.ind = "cos2", # Color by the quality of representation
-  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  col.ind = data_meth_pca$`ID Sire`, # Color by the quality of representation
   repel = TRUE,     # Avoid text overlapping
+  addEllipses = TRUE,
   label = "none"
-)
+) +
+  scale_shape_manual(values=seq(0,27))
+
+
+
+grm = as.data.frame(K) %>%
+  rownames_to_column("RegistroGenealogico") %>%
+  left_join(metanames, by = "RegistroGenealogico") %>%
+  dplyr::select(-c(RegistroGenealogico, cib, MUESTRA, Dam, "ID Sire", "ID dam", "Country", "BirthDate"))
+
+res.pca<-prcomp(grm[,-ncol(grm)], scale = T)
+
+fviz_pca_ind(res.pca,
+  col.ind = grm$Month, # Color by the quality of representation
+  repel = TRUE,     # Avoid text overlapping
+  addEllipses = TRUE,
+  label = "none"
+) +
+  scale_shape_manual(values=seq(0,27))
+
 ###########
 ### RESULTS
 ###########
@@ -511,11 +541,11 @@ filtered_data <- CpGmapped_dgat %>%
   filter(MAPINFO >= start_position-window & MAPINFO <= end_position+window) 
 
 ### Estimate average methylation
-#for(i in 1:nrow(filtered_data)){
-#  assign(filtered_data$Probe_ID[i],filtered_data[i,])
-#  write.table(t(filtered_data[i,]),file = paste0("blupf90/DGAT1_",filtered_data$Probe_ID[i],".tsv"),
-#              quote=F,col.names = F,row.names=F,sep="\t")
-#}
+for(i in 1:nrow(filtered_data)){
+  assign(filtered_data$Probe_ID[i],filtered_data[i,])
+  write.table(t(filtered_data[i,]),file = paste0("blupf90/DGAT1_",filtered_data$Probe_ID[i],".tsv"),
+              quote=F,col.names = F,row.names=F,sep="\t")
+}
 
 CpGtraspose_means = CpGtraspose %>%
   rownames_to_column(var = "rowname") %>%
@@ -547,17 +577,156 @@ datosblup = merge(sampleID,merged_data,by="MUESTRA")
 
 datosblup_write = datosblup %>%
   mutate(Media=1) %>%
-  dplyr::select(RegistroGenealogico,Media,cg287646953_BC21,cg287647051_BC21,cg287647433_TC11,Avg)
+  dplyr::select(RegistroGenealogico,Media,cg287646953_BC21,cg287647051_BC21,cg287647433_TC11,Avg) %>%
+  mutate(Avg = round(as.numeric(Avg,3)))
 
 
-#pedi = fread("/Users/adri/Nextcloud/Documents/Rumigen/Metadata Terneras/Pedigri_clean.tsv")
-pedi = fread("C:/Users/alopez.catalina/Nextcloud/Documents/Rumigen/Metadata\ Terneras/Pedigri_clean.tsv")
-pedi_clean = pedi %>%
-  dplyr::select(RegistroGenealogico,`ID dam`,`ID Sire`)
-
+#setwd("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
 #setwd("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
 fwrite(datosblup_write,"blupf90/datosBlup.txt",quote=F,col.names=T,row.names=F,sep=" ")
 fwrite(blupmatrix,"blupf90/Genotipos.txt",quote=F,col.names=F,row.names=F,sep=" ")
 fwrite(pedi_clean,"blupf90/Pedigree.txt",quote=F,col.names=F,row.names=F,sep=" ")
+fwrite(cleanmap,"blupf90/MapFiltered.map",quote=F,col.names=,row.names=F,sep=" ")
 
 
+###### Repetir PCA con posiciones significativas
+
+methsnps_sig = gwasResults_sig_fdr %>%
+  dplyr::select(SNP)
+
+data_sig_meth_pca = data_meth_pca[,which(colnames(data_meth_pca) %in% methsnps_sig$SNP)]
+
+meth_pca <- prcomp(data_sig_meth_pca, scale = T)
+
+fviz_pca_ind(meth_pca,
+  col.ind = data_meth_pca$Dam, # Color by the quality of representation
+  repel = TRUE,     # Avoid text overlapping
+  addEllipses = TRUE,
+  label = "none"
+) +
+  scale_shape_manual(values=seq(0,27))
+
+# 
+gwas_results_sig = fread("C:/Users/alopez.catalina/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/ewasimputed_GWAS.resultsBonferroni") %>% dplyr::filter(!is.na(CHR))
+probesID = gwas_results_sig$SNP
+
+CpGs_signi_gwas <- CpG_imputed_to_merge %>%
+  dplyr::select(any_of(probesID))
+
+CpGs_signi_gwas = CpGs_signi_gwas %>%
+  mutate(MUESTRA = rownames(CpGs_signi_gwas))
+
+sampleID = designmatrix %>% dplyr::select(RegistroGenealogico,MUESTRA)
+
+
+
+# Modify column names in CpG_matrix_signi
+
+CpG_matrix_signi_names = as.data.frame(merge(CpGs_signi_gwas,sampleID,by="MUESTRA"))
+CpG_matrix_signi_names <- CpG_matrix_signi_names %>%
+  distinct() %>% dplyr::select(-MUESTRA)
+
+colnames(snpMatrix)[1] = "RegistroGenealogico"
+
+allinfo = merge(CpG_matrix_signi_names,snpMatrix,by="RegistroGenealogico")
+
+datosblup_write = allinfo %>%
+  dplyr::select("RegistroGenealogico",starts_with("cg")) %>%
+  mutate(across(starts_with("cg"), ~ round(., 4))) %>%
+  mutate(Mean=1) %>%
+  dplyr::select(RegistroGenealogico,Mean,starts_with("cg"))
+
+genosclean = allinfo %>%
+  dplyr::select("RegistroGenealogico",starts_with("V")) %>%
+  distinct()
+
+rownames(genosclean) = genosclean$RegistroGenealogico
+genosclean$RegistroGenealogico = NULL
+
+tmp = c()
+blupmatrix = data.frame("Sample"=NULL,"SNP"=NULL)
+for(i in 1:nrow(genosclean)){
+  tmp = unlist(unname(genosclean[i,] ))
+  blupmatrix[i,1] = rownames(genosclean)[i]
+  blupmatrix[i,2] = paste(tmp,collapse="")
+}
+
+namesprobe = data.frame(ID = colnames(datosblup_write)[3:ncol(datosblup_write)], stringsAsFactors = FALSE)
+
+setwd("C:/Users/alopez.catalina/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/")
+fwrite(datosblup_write,"blupallcpg/DatosBlup.txt",quote=F,col.names=F,row.names=F,sep=" ")
+fwrite(namesprobe,"blupallcpg/namesProbes.txt",quote=F,col.names=F,row.names=F,sep=" ")
+#fwrite(blupmatrix,"blupallcpg/Genos.txt",quote=F,col.names=F,row.names=T,sep=" ")
+
+
+
+
+##Clima
+gir2020 <- fromJSON("D:/RUMIGEN/Temperatura/Girona2020.json")
+gir2021 <- fromJSON("D:/RUMIGEN/Temperatura/Girona2021.json")
+gir2022 <- fromJSON("D:/RUMIGEN/Temperatura/Girona2022.json")
+
+extract_fecha <- function(x){
+  x$fecha <- as.Date(paste0(x$fecha, "-01"))
+  x$mes <- format(x$fecha, "%B")
+  x <- x %>%
+    filter(!is.na(mes)) %>%
+    select(mes,tm_mes) %>%
+    mutate(tm_mes = as.numeric(tm_mes))
+
+  mu <- mean(x$tm_mes)
+  sigma <- sd(x$tm_mes)
+  x$clima <- cut(x$tm_mes, 
+    breaks = c(-Inf, mu - sigma, mu, mu + sigma, Inf), 
+    labels = c("Cold", "Mild_cold", "Mild_warm", "Hot"),
+    right = TRUE)
+  return(x)
+}
+
+gir2020 = extract_fecha(gir2020)
+gir2021 = extract_fecha(gir2021)
+gir2022 = extract_fecha(gir2022)
+
+gir2020$year = 2020
+gir2021$year = 2021
+gir2022$year = 2022
+
+girtemp = rbind(gir2020,gir2021,gir2022)
+girtemp$year = as.factor(girtemp$year)
+
+
+metadata = subset_gestacion %>%
+  select(RegistroGenealogico,cib,fpar,Dam,numpar) %>%
+  mutate(fpar = as.Date(fpar)) %>%
+  mutate(
+    mes = format(fpar, "%B"),
+    year = format(fpar, "%Y")
+  )
+
+merged_df <- merge(metadata, girtemp, by = c("year", "mes")) %>%
+  select(RegistroGenealogico, clima, numpar)
+datosblup_write = fread("blupallcpg/DatosBlup.txt")
+colnames(datosblup_write)[1:2] = c("RegistroGenealogico","Media")
+
+blupambiental = merge(merged_df,datosblup_write,by="RegistroGenealogico")
+blupambiental <- blupambiental %>%
+  select(RegistroGenealogico, Media, numpar, clima, starts_with("V"))
+
+fwrite(blupambiental,"blupallcpg/BlupClima.txt",quote=F,col.names=F,row.names=F,sep=" ")
+
+df <- fread("/Users/adri/Nextcloud/Datos/RUMIGEN/EpiChip/EWAS/blupclima/heredabilidades_extraidas.txt")  # Replace with your actual file
+# Rename columns for clarity (modify if needed)
+colnames(df) <- c("CpG_Site", "Heritability", "Lower_HPD", "Upper_HPD")
+df <- df %>%
+  mutate(CpG_Site = str_extract(CpG_Site, "cg[0-9]+_(BC|TC|BO)[0-9]+"))
+# Sort by heritability for better visualisation
+df <- df[order(df$Heritability, decreasing = TRUE), ]
+# Convert CpG_Site to factor to maintain order in the plot
+df$CpG_Site <- factor(df$CpG_Site, levels = df$CpG_Site)
+# Create the forest plot
+ggplot(df, aes(x = Heritability, y = CpG_Site)) +
+  geom_point(size = 2, colour = "blue") +  # Plot estimates
+  geom_errorbarh(aes(xmin = Lower_HPD, xmax = Upper_HPD), height = 0.2, colour = "black") + # HPD95% interval
+  labs(x = "Heritability Estimate", y = "CpG Site", title = "Heritability Estimates with HPD95% Intervals") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 6))  # Adjust text size if too many sites
